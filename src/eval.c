@@ -1,40 +1,30 @@
 #include "eval.h"
 
 types *eval_s_expr_t(types *t);
-
 types *builtin_t(types *symbol, types *args);
-
 types *builtin_binop_t(char *op, types *args);
-
 types *builtin_list_t(types *args);
-
 types *builtin_car_t(types *args);
+types *builtin_cdr_t(types *args);
+types *builtin_quote_t(types *args);
 
 types *eval_t(types *t) {
   switch (t->type) {
-    case S_EXPR_T:
-      return eval_s_expr_t(t);
-    default:
-      return t;
+    case S_EXPR_T: return eval_s_expr_t(t);
+    default: return t;
   }
 }
 
 types *eval_s_expr_t(types *t) {
-  for (int i = 0; i < t->children_num; ++i) {
-    t->children[i] = eval_t(t->children[i]);
-    if (t->children[i]->type == ERR_T) {
-      return take_t(t, i);
-    }
-  }
-
   if (t->children_num == 0) return t;
-  if (t->children_num == 1) return t->children[0];
+  if (t->children_num == 1 && t->children[0]->type != SYMBOL_T)
+    return eval_t(t->children[0]);
 
   types *symbol = pop_t(t, 0);
   if (symbol->type != SYMBOL_T) {
     free_t(t);
     free_t(symbol);
-    return new_err_t(ERR_NO_SYMBOL);
+    return new_err_t(ERR_NO_SYMBOL, "");
   }
 
   types *result = builtin_t(symbol, t);
@@ -44,29 +34,37 @@ types *eval_s_expr_t(types *t) {
 }
 
 types *builtin_t(types *func, types *args) {
+  if (strcmp("quote", func->symbol) == 0) { return builtin_quote_t(args); }
+
+  for (int i = 0; i < args->children_num; ++i) {
+    args->children[i] = eval_t(args->children[i]);
+    if (args->children[i]->type == ERR_T) {
+      return take_t(args, i);
+    }
+  }
+
   if (strcmp("list", func->symbol) == 0) { return builtin_list_t(args); }
   if (strcmp("car", func->symbol) == 0) { return builtin_car_t(args); }
+  if (strcmp("cdr", func->symbol) == 0) { return builtin_cdr_t(args); }
   if (strstr("+-*/", func->symbol)) {
     return builtin_binop_t(func->symbol, args);
   }
 
   free_t(args);
-  return new_err_t(ERR_INVALID_SYMBOL);
+  return new_err_t(ERR_INVALID_SYMBOL, func->symbol);
 }
 
 types *builtin_list_t(types *args) {
-  return new_quote_t(args);
+  return args;
 }
 
 types *builtin_binop_t(char *op, types *args) {
   for (int i = 0; i < args->children_num; ++i) {
-    if (args->children[i]->type != NUMBER_T) {
-      free_t(args);
-      return new_err_t(ERR_MUST_BE_NUMBER_SYMBOL);
-    }
+    assert_t(args->children[i]->type == NUMBER_T, args,
+             ERR_MUST_BE_NUMBER_SYMBOL, "");
   }
 
-  types *head = pop_t(args, 0);
+  types *head = args->children_num > 0 ? pop_t(args, 0) : new_number_t(0);
 
   if (strcmp(op, "-") == 0 && args->children_num == 0) {
     head->number = -head->number;
@@ -81,7 +79,7 @@ types *builtin_binop_t(char *op, types *args) {
       if (current->number == 0) {
         free_t(head);
         free_t(current);
-        return new_err_t(ERR_DIV_ZERO);
+        return new_err_t(ERR_DIV_ZERO, "");
       }
       head->number /= current->number;
     }
@@ -89,29 +87,40 @@ types *builtin_binop_t(char *op, types *args) {
   }
 
   free_t(args);
-
   return head;
 }
 
 types *builtin_car_t(types *args) {
-  if (args->children_num != 1) {
-    free_t(args);
-    return new_func_err_t(ERR_INVALID_ARGS_NUMBER, "car");
-  }
+  assert_t(args->children_num == 1, args, ERR_TOO_MANY_ARGS, "car");
+  assert_t(args->children[0]->type == S_EXPR_T,
+           args,
+           ERR_INVALID_LIST_ARG,
+           "car");
+  assert_t(args->children[0]->children_num >= 1, args, ERR_INVALID_ARGS,
+           "empty list passed to function 'car'");
 
-  if (args->children[0]->type != QUOTE_T) {
-    free_t(args);
-    return new_func_err_t(ERR_INVALID_ARGS_TYPE, "car");
-  }
-
-  if (args->children[0]->quote->type != S_EXPR_T ||
-      args->children[0]->quote->children_num < 1) {
-    free_t(args);
-    return new_func_err_t(ERR_INVALID_ARGS, "car");
-  }
-
-  types *head = pop_t(args->children[0]->quote, 0);
+  types *head = pop_t(args->children[0], 0);
   free_t(args);
-
   return head;
+}
+
+types *builtin_cdr_t(types *args) {
+  assert_t(args->children_num == 1, args, ERR_TOO_MANY_ARGS, "cdr");
+  assert_t(args->children[0]->type == S_EXPR_T,
+           args,
+           ERR_INVALID_LIST_ARG,
+           "cdr");
+
+  types *list = take_t(args, 0);
+  if (list->children_num > 1) {
+    free_t(pop_t(list, 0));
+  }
+  return list;
+}
+
+types *builtin_quote_t(types *args) {
+  assert_t(args->children_num == 1, args, ERR_INVALID_ARGS,
+           "too many arguments given to function 'quote'");
+  types *quote = take_t(args, 0);
+  return quote;
 }

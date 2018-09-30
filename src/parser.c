@@ -12,9 +12,9 @@ void parser_init() {
   mpca_lang(
     MPCA_LANG_DEFAULT,
     "number: /-?[0-9]+/;"
-    "symbol: '+' | '-' | '*' | '/' | \"list\" | \"car\" | \"cdr\" ;"
+    "symbol: '+' | '-' | '*' | '/' | \"list\" | \"car\" | \"cdr\" | \"quote\" ;"
+    "quote: '\'' <expr> ;"
     "s_expr: '(' <expr>* ')' ;"
-    "quote: '(' \"quote\" <expr> ')' | '\'' <expr> ;"
     "expr: <number> | <symbol> | <s_expr> | <quote> ;"
     "program: /^/ <expr>* /$/;",
     Number, Symbol, Expr, S_expr, Program, Quote

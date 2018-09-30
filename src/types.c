@@ -8,19 +8,14 @@ types *new_number_t(long number) {
   return ret;
 }
 
-types *new_err_t(int err_code) {
+types *new_err_t(int err_code, char *err) {
   types *ret = malloc(sizeof(types));
   ret->type = ERR_T;
-  ret->err = err_code;
-  ret->func_name = "lisp";
-  return ret;
-}
+  ret->err_code = err_code;
 
-types *new_func_err_t(int err_code, char *func_name) {
-  types *ret = malloc(sizeof(types));
-  ret->type = ERR_T;
-  ret->err = err_code;
-  ret->func_name = func_name;
+  ret->err = malloc(strlen(err) + 1);
+  strcpy(ret->err, err);
+
   return ret;
 }
 
@@ -42,8 +37,14 @@ types *new_s_expr_t() {
 
 types *new_quote_t(types *expr) {
   types *ret = malloc(sizeof(types));
-  ret->type = QUOTE_T;
-  ret->quote = expr;
+  ret->type = S_EXPR_T;
+  ret->children_num = 0;
+  ret->children = NULL;
+
+  types *quote = new_symbol_t("quote");
+  s_expr_add_t(ret, quote);
+  s_expr_add_t(ret, expr);
+
   return ret;
 }
 
@@ -52,24 +53,15 @@ void s_expr_add_t(types *s_expr, types *t) {
   s_expr->children = realloc(s_expr->children,
                              sizeof(types *) * s_expr->children_num);
   s_expr->children[s_expr->children_num - 1] = t;
-
-
-}
-
-bool is_err_t(types *t) {
-  return t->type == ERR_T;
 }
 
 void print_err_t(types *t) {
-  switch (t->err) {
-    case ERR_DIV_ZERO:
-      printf("error: divide by zero");
+  switch (t->err_code) {
+    case ERR_DIV_ZERO: printf("error: divide by zero");
       return;
-    case ERR_INVALID_SYMBOL:
-      printf("error: invalid operation");
+    case ERR_INVALID_SYMBOL: printf("error: invalid function: '%s'", t->err);
       return;
-    case ERR_INVALID_NUMBER:
-      printf("error: invalid number");
+    case ERR_INVALID_NUMBER: printf("error: '%s' is an invalid number", t->err);
       return;
     case ERR_NO_SYMBOL:
       printf("error: symbol not found at start of s-expression");
@@ -77,17 +69,15 @@ void print_err_t(types *t) {
     case ERR_MUST_BE_NUMBER_SYMBOL:
       printf("error: cannot perform operation on non-number");
       return;
-    case ERR_INVALID_ARGS_NUMBER:
-      printf("error: wrong number of arguments passed to function '%s'",
-             t->func_name);
+    case ERR_INVALID_ARGS: printf("error: invalid arguments: %s", t->err);
       return;
-    case ERR_INVALID_ARGS_TYPE:
-      printf("error: wrong type of arguments passed to function '%s'",
-             t->func_name);
+    case ERR_TOO_MANY_ARGS:
+      printf("error: too many arguments given to function '%s'",
+             t->err);
       return;
-    case ERR_INVALID_ARGS:
-      printf("error: invalid arguments passed to function '%s'",
-             t->func_name);
+    case ERR_INVALID_LIST_ARG:
+      printf("error: non-list argument passed to function '%s'",
+             t->err);
       return;
   }
 }
@@ -106,36 +96,20 @@ void print_s_expr_t(types *t) {
 
 void print_expr_t(types *t) {
   switch (t->type) {
-    case NUMBER_T:
-      printf("%li", t->number);
+    case NUMBER_T: printf("%li", t->number);
       return;
-
-    case SYMBOL_T:
-      printf("%s", t->symbol);
+    case SYMBOL_T: printf("%s", t->symbol);
       return;
-
-    case QUOTE_T:
-      printf("'");
-      print_t(t->quote);
+    case S_EXPR_T: print_s_expr_t(t);
       return;
-
-    case S_EXPR_T:
-      print_s_expr_t(t);
-      return;
-
-    case ERR_T:
-      print_err_t(t);
+    case ERR_T: print_err_t(t);
       return;
   }
 }
 
 void print_t(types *t) {
   switch (t->type) {
-    case QUOTE_T:
-      print_expr_t(t->quote);
-      return;
-    default:
-      print_expr_t(t);
+    default: print_expr_t(t);
   }
 }
 
@@ -147,12 +121,18 @@ void println_t(types *t) {
 types *read_number_t(mpc_ast_t *ast) {
   errno = 0;
   long number = strtol(ast->contents, NULL, 10);
-  return errno != ERANGE ? new_number_t(number) : new_err_t(ERR_INVALID_NUMBER);
+  return errno != ERANGE ? new_number_t(number) : new_err_t(ERR_INVALID_NUMBER,
+                                                            ast->contents);
 }
 
 types *read_t(mpc_ast_t *ast) {
-  if (strstr(ast->tag, "number")) { return read_number_t(ast); }
-  if (strstr(ast->tag, "symbol")) { return new_symbol_t(ast->contents); }
+  if (strstr(ast->tag, "number")) {
+    return read_number_t(ast);
+  }
+
+  if (strstr(ast->tag, "symbol")) {
+    return new_symbol_t(ast->contents);
+  }
 
   types *ret = NULL;
 
@@ -160,21 +140,16 @@ types *read_t(mpc_ast_t *ast) {
     ret = new_s_expr_t();
     for (int i = 0; i < ast->children_num; ++i) {
       if (strcmp(ast->children[i]->contents, "(") == 0 ||
-          strcmp(ast->children[i]->contents, ")") == 0 ||
-          strcmp(ast->children[i]->tag, "regex") == 0) { continue; }
+        strcmp(ast->children[i]->contents, ")") == 0 ||
+        strcmp(ast->children[i]->tag, "regex") == 0) {
+        continue;
+      }
       s_expr_add_t(ret, read_t(ast->children[i]));
     }
   }
 
   if (strstr(ast->tag, "quote")) {
-    types *quote = NULL;
-    if (ast->children_num == 4) {
-      // ( quote <expr> )
-      quote = read_t(ast->children[2]);
-    } else if (ast->children_num == 2) {
-      // ' <expr>
-      quote = read_t(ast->children[1]);
-    }
+    types *quote = read_t(ast->children[1]);
     if (quote->type == ERR_T) {
       free(ret);
       return quote;
@@ -182,20 +157,14 @@ types *read_t(mpc_ast_t *ast) {
     ret = new_quote_t(quote);
   }
 
-
   return ret;
 }
 
 void free_t(types *t) {
   switch (t->type) {
-    case SYMBOL_T:
-      free(t->symbol);
+    case SYMBOL_T: free(t->symbol);
       break;
-    case ERR_T:
-      free(t->func_name);
-      break;
-    case QUOTE_T:
-      free(t->quote);
+    case ERR_T: free(t->err);
       break;
     case S_EXPR_T:
       for (int i = 0; i < t->children_num; ++i) {

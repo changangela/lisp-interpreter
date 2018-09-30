@@ -9,5 +9,4 @@ void parser_init();
 void parser_parse(char *buffer);
 void parser_cleanup();
 
-
 #endif //parser_h
