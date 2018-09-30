@@ -1,15 +1,15 @@
 #include <stdlib.h>
 #include "types.h"
 
-types *new_number_t(long number) {
-  types *ret = malloc(sizeof(types));
+val_t *new_number_t(long number) {
+  val_t *ret = malloc(sizeof(val_t));
   ret->type = NUMBER_T;
   ret->number = number;
   return ret;
 }
 
-types *new_err_t(int err_code, char *err) {
-  types *ret = malloc(sizeof(types));
+val_t *new_err_t(int err_code, char *err) {
+  val_t *ret = malloc(sizeof(val_t));
   ret->type = ERR_T;
   ret->err_code = err_code;
 
@@ -19,43 +19,50 @@ types *new_err_t(int err_code, char *err) {
   return ret;
 }
 
-types *new_symbol_t(char *symbol) {
-  types *ret = malloc(sizeof(types));
+val_t *new_symbol_t(char *symbol) {
+  val_t *ret = malloc(sizeof(val_t));
   ret->type = SYMBOL_T;
   ret->symbol = malloc(strlen(symbol) + 1);
   strcpy(ret->symbol, symbol);
   return ret;
 }
 
-types *new_s_expr_t() {
-  types *ret = malloc(sizeof(types));
+val_t *new_s_expr_t() {
+  val_t *ret = malloc(sizeof(val_t));
   ret->type = S_EXPR_T;
   ret->children_num = 0;
   ret->children = NULL;
   return ret;
 }
 
-types *new_quote_t(types *expr) {
-  types *ret = malloc(sizeof(types));
+val_t *new_quote_t(val_t *expr) {
+  val_t *ret = malloc(sizeof(val_t));
   ret->type = S_EXPR_T;
   ret->children_num = 0;
   ret->children = NULL;
 
-  types *quote = new_symbol_t("quote");
+  val_t *quote = new_symbol_t("quote");
   s_expr_add_t(ret, quote);
   s_expr_add_t(ret, expr);
 
   return ret;
 }
 
-void s_expr_add_t(types *s_expr, types *t) {
+val_t *new_func_t(builtin_t *func) {
+  val_t *ret = malloc(sizeof(val_t));
+  ret->type = FUNC_T;
+  ret->func = func;
+  return ret;
+}
+
+void s_expr_add_t(val_t *s_expr, val_t *t) {
   s_expr->children_num++;
   s_expr->children = realloc(s_expr->children,
-                             sizeof(types *) * s_expr->children_num);
+    sizeof(val_t *) * s_expr->children_num);
   s_expr->children[s_expr->children_num - 1] = t;
 }
 
-void print_err_t(types *t) {
+void print_err_t(val_t *t) {
   switch (t->err_code) {
     case ERR_DIV_ZERO: printf("error: divide by zero");
       return;
@@ -64,25 +71,26 @@ void print_err_t(types *t) {
     case ERR_INVALID_NUMBER: printf("error: '%s' is an invalid number", t->err);
       return;
     case ERR_NO_SYMBOL:
-      printf("error: symbol not found at start of s-expression");
+      printf("error: function not found at start of s-expression");
       return;
-    case ERR_MUST_BE_NUMBER_SYMBOL:
-      printf("error: cannot perform operation on non-number");
-      return;
-    case ERR_INVALID_ARGS: printf("error: invalid arguments: %s", t->err);
+    case ERR_INVALID_ARGS: printf("error: invalid arguments: '%s'", t->err);
       return;
     case ERR_TOO_MANY_ARGS:
       printf("error: too many arguments given to function '%s'",
-             t->err);
+        t->err);
       return;
     case ERR_INVALID_LIST_ARG:
       printf("error: non-list argument passed to function '%s'",
-             t->err);
+        t->err);
       return;
+    case ERR_INVALID_NUMBER_ARG:
+      printf("error: non-number argument passed to operator '%s'", t->err);
+      return;
+    case ERR_UNBOUND_SYMBOL: printf("error: unbounded symbol: '%s'", t->err);
   }
 }
 
-void print_s_expr_t(types *t) {
+void print_s_expr_t(val_t *t) {
   putchar('(');
   for (int i = 0; i < t->children_num; ++i) {
     print_t(t->children[i]);
@@ -94,7 +102,7 @@ void print_s_expr_t(types *t) {
   putchar(')');
 }
 
-void print_expr_t(types *t) {
+void print_expr_t(val_t *t) {
   switch (t->type) {
     case NUMBER_T: printf("%li", t->number);
       return;
@@ -104,28 +112,29 @@ void print_expr_t(types *t) {
       return;
     case ERR_T: print_err_t(t);
       return;
+    case FUNC_T: printf("<function>");
   }
 }
 
-void print_t(types *t) {
+void print_t(val_t *t) {
   switch (t->type) {
     default: print_expr_t(t);
   }
 }
 
-void println_t(types *t) {
+void println_t(val_t *t) {
   print_t(t);
   printf("\n");
 }
 
-types *read_number_t(mpc_ast_t *ast) {
+val_t *read_number_t(mpc_ast_t *ast) {
   errno = 0;
   long number = strtol(ast->contents, NULL, 10);
   return errno != ERANGE ? new_number_t(number) : new_err_t(ERR_INVALID_NUMBER,
-                                                            ast->contents);
+    ast->contents);
 }
 
-types *read_t(mpc_ast_t *ast) {
+val_t *read_t(mpc_ast_t *ast) {
   if (strstr(ast->tag, "number")) {
     return read_number_t(ast);
   }
@@ -134,7 +143,7 @@ types *read_t(mpc_ast_t *ast) {
     return new_symbol_t(ast->contents);
   }
 
-  types *ret = NULL;
+  val_t *ret = NULL;
 
   if (strcmp(ast->tag, ">") == 0 || strstr(ast->tag, "s_expr")) {
     ret = new_s_expr_t();
@@ -149,7 +158,7 @@ types *read_t(mpc_ast_t *ast) {
   }
 
   if (strstr(ast->tag, "quote")) {
-    types *quote = read_t(ast->children[1]);
+    val_t *quote = read_t(ast->children[1]);
     if (quote->type == ERR_T) {
       free(ret);
       return quote;
@@ -160,7 +169,7 @@ types *read_t(mpc_ast_t *ast) {
   return ret;
 }
 
-void free_t(types *t) {
+void free_t(val_t *t) {
   switch (t->type) {
     case SYMBOL_T: free(t->symbol);
       break;
@@ -175,17 +184,52 @@ void free_t(types *t) {
   free(t);
 }
 
-types *take_t(types *t, int i) {
-  types *target = pop_t(t, i);
+val_t *take_t(val_t *t, int i) {
+  val_t *target = pop_t(t, i);
   free_t(t);
   return target;
 }
 
-types *pop_t(types *t, int i) {
-  types *target = t->children[i];
+val_t *pop_t(val_t *t, int i) {
+  val_t *target = t->children[i];
   memmove(&t->children[i], &t->children[i + 1],
-          sizeof(types *) * (t->children_num - i - 1));
+    sizeof(val_t *) * (t->children_num - i - 1));
   t->children_num--;
-  t->children = realloc(t->children, sizeof(types *) * t->children_num);
+  t->children = realloc(t->children, sizeof(val_t *) * t->children_num);
   return target;
+}
+
+void *join_t(val_t *head, val_t *tail) {
+  while (tail->children_num > 0) {
+    s_expr_add_t(head, pop_t(tail, 0));
+  }
+  free_t(tail);
+}
+
+val_t *copy_t(val_t *t) {
+  val_t *ret = malloc(sizeof(val_t));
+  ret->type = t->type;
+
+  switch (t->type) {
+    case FUNC_T: ret->func = t->func; break;
+    case NUMBER_T: ret->number = t->number; break;
+    case SYMBOL_T:
+      ret->symbol = malloc(strlen(t->symbol) + 1);
+      strcpy(ret->symbol, t->symbol);
+      break;
+    case ERR_T:
+      ret->err_code = t->err_code;
+      ret->err = malloc(strlen(t->err));
+      strcpy(ret->err, t->err);
+      break;
+    case S_EXPR_T:
+      ret->children_num = t->children_num;
+      ret->children = malloc(sizeof(val_t*) * ret->children_num);
+      for (int i = 0; i < t->children_num; ++i) {
+        ret->children[i] = copy_t(t->children[i]);
+      }
+      break;
+  }
+
+  return ret;
 }

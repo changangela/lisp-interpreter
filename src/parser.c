@@ -1,5 +1,4 @@
 #include "parser.h"
-#include "eval.h"
 
 void parser_init() {
   Number = mpc_new("number");
@@ -12,7 +11,7 @@ void parser_init() {
   mpca_lang(
     MPCA_LANG_DEFAULT,
     "number: /-?[0-9]+/;"
-    "symbol: '+' | '-' | '*' | '/' | \"list\" | \"car\" | \"cdr\" | \"quote\" ;"
+    "symbol: /[a-zA-Z0-9_+\\-*\\/]+/ ;"
     "quote: '\'' <expr> ;"
     "s_expr: '(' <expr>* ')' ;"
     "expr: <number> | <symbol> | <s_expr> | <quote> ;"
@@ -21,11 +20,11 @@ void parser_init() {
   );
 }
 
-void parser_parse(char *buffer) {
+void parser_parse(env_t *env, char *buffer) {
   mpc_result_t result;
 
   if (mpc_parse("<stdin>", buffer, Program, &result)) {
-    types *lisp = eval_t(read_t(result.output));
+    val_t *lisp = eval_t(env, read_t(result.output));
     println_t(lisp);
     free_t(lisp);
     mpc_ast_delete(result.output);
