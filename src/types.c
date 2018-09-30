@@ -83,15 +83,18 @@ void print_s_expr_t(types *t) {
   putchar(')');
 }
 
-void print_t(types *t) {
+void print_expr_t(types *t) {
   switch (t->type) {
     case NUMBER_T:
       printf("%li", t->number);
       return;
+
     case SYMBOL_T:
       printf("%s", t->symbol);
       return;
+
     case QUOTE_T:
+      printf("'");
       print_t(t->quote);
       return;
 
@@ -102,6 +105,16 @@ void print_t(types *t) {
     case ERR_T:
       print_err_t(t);
       return;
+  }
+}
+
+void print_t(types *t) {
+  switch(t->type) {
+    case QUOTE_T:
+      print_expr_t(t->quote);
+      return;
+    default:
+      print_expr_t(t);
   }
 }
 
@@ -133,7 +146,14 @@ types *read_t(mpc_ast_t *ast) {
   }
 
   if (strstr(ast->tag, "quote")) {
-    types *quote = read_t(ast->children[2]); // '(' | "quote" | expr | ')'
+    types *quote = NULL;
+    if (ast->children_num == 4) {
+      // ( quote <expr> )
+      quote = read_t(ast->children[2]);
+    } else if (ast->children_num == 2) {
+      // ' <expr>
+      quote = read_t(ast->children[1]);
+    }
     if (quote->type == ERR_T) { free(ret); return quote; }
     ret = new_quote_t(quote);
   }

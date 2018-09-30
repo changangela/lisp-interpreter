@@ -12,9 +12,9 @@ void parser_init() {
   mpca_lang(
     MPCA_LANG_DEFAULT,
     "number: /-?[0-9]+/;"
-    "symbol: '+' | '-' | '*' | '/' ;"
+    "symbol: '+' | '-' | '*' | '/' | \"list\" ;"
     "s_expr: '(' <expr>* ')' ;"
-    "quote: '(' \"quote\" <expr> ')' ;"
+    "quote: '(' \"quote\" <expr> ')' | '\'' <expr> ;"
     "expr: <number> | <symbol> | <s_expr> | <quote> ;"
     "program: /^/ <expr>* /$/;",
     Number, Symbol, Expr, S_expr, Program, Quote
@@ -25,8 +25,8 @@ void parser_parse(char *buffer) {
   mpc_result_t result;
 
   if (mpc_parse("<stdin>", buffer, Program, &result)) {
-    types *lisp = read_t(result.output);
-    println_t(eval_t(lisp));
+    types *lisp = eval_t(read_t(result.output));
+    println_t(lisp);
     free_t(lisp);
     mpc_ast_delete(result.output);
 
