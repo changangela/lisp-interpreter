@@ -4,6 +4,6 @@
 #include "../lib/mpc.h"
 #include "types.h"
 
-types eval_program(mpc_ast_t *ast);
+types *eval_t(types *t);
 
 #endif //eval_h

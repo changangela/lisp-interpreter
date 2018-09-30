@@ -3394,7 +3394,6 @@ static mpc_parser_t *mpca_grammar_find_parser(char *x, mpca_grammar_st_t *st) {
     }
 
   }
-
 }
 
 static mpc_val_t *mpcaf_grammar_id(mpc_val_t *x, void *s) {

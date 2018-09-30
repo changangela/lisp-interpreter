@@ -1,46 +1,68 @@
 #include "eval.h"
 
-types eval_expr(mpc_ast_t *ast);
-types bin_op(types x, char *op, types y);
+types *eval_s_expr_t(types *t);
+types *builtin_t(types *symbol, types *args);
 
-types eval_program(mpc_ast_t *ast) {
-  if (ast->children_num == 3) {
-    return eval_expr(ast->children[1]);
-  } else {
-    return eval_expr(ast);
+types *eval_t(types *t) {
+  switch(t->type) {
+    case S_EXPR_T: return eval_s_expr_t(t);
+    default: return t;
   }
 }
 
-types eval_expr(mpc_ast_t *ast) {
-  if (strstr(ast->tag, "number")) {
-    errno = 0;
-    long number = strtol(ast->contents, NULL, 10);
-    return errno != ERANGE ? new_tnumber(number) : new_terr(ERR_INVALID_NUMBER);
-  }
-
-  char *op = ast->children[1]->contents;
-  types x = eval_expr(ast->children[2]);
-  if (is_terr(x)) {
-    return x;
-  }
-
-  for (int i = 3; i < ast->children_num && strstr(ast->children[i]->tag, "expr"); ++i) {
-    types y = eval_expr(ast->children[i]);
-    if (is_terr(y)) {
-      return y;
+types *eval_s_expr_t(types *t) {
+  for (int i = 0; i < t->children_num; ++i) {
+    t->children[i] = eval_t(t->children[i]);
+    if (t->children[i]->type == ERR_T) {
+      return take_t(t, i);
     }
-    x = bin_op(x, op, y);
   }
 
-  return x;
+  if (t->children_num == 0) return t;
+  if (t->children_num == 1) return t->children[0];
+
+  types *symbol = pop_t(t, 0);
+  if (symbol->type != SYMBOL_T) {
+    free_t(t); free_t(symbol);
+    return new_err_t(ERR_NO_SYMBOL);
+  }
+
+  types *result = builtin_t(symbol, t);
+  free_t(symbol);
+
+  return result;
 }
 
-types bin_op(types x, char *op, types y) {
-  if (strcmp(op, "+") == 0) { return new_tnumber(x.number + y.number); }
-  if (strcmp(op, "-") == 0) { return new_tnumber(x.number - y.number); }
-  if (strcmp(op, "*") == 0) { return new_tnumber(x.number * y.number); }
-  if (strcmp(op, "/") == 0) {
-    return (y.number == 0) ? new_terr(ERR_DIV_ZERO) : new_tnumber(x.number / y.number);
+types *builtin_t(types *symbol, types *args) {
+  for (int i = 0; i < args->children_num; ++i) {
+    if (args->children[i]->type != NUMBER_T) {
+      free_t(args);
+      return new_err_t(ERR_MUST_BE_NUMBER_SYMBOL);
+    }
   }
-  return new_terr(ERR_INVALID_OP);
+
+  types *head = pop_t(args, 0);
+
+  if (strcmp(symbol->symbol, "-") == 0 && args->children_num == 0) {
+    head->number = - head->number;
+  }
+
+  while (args->children_num > 0) {
+    types *current = pop_t(args, 0);
+    if (strcmp(symbol->symbol, "+") == 0) { head->number += current->number; }
+    if (strcmp(symbol->symbol, "-") == 0) { head->number -= current->number; }
+    if (strcmp(symbol->symbol, "*") == 0) { head->number *= current->number; }
+    if (strcmp(symbol->symbol, "/") == 0) {
+      if (current->number == 0) {
+        free_t(head); free_t(current);
+        return new_err_t(ERR_DIV_ZERO);
+      }
+      head->number /= current->number;
+    }
+    free_t(current);
+  }
+
+  free_t(args);
+
+  return head;
 }
