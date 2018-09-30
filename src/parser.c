@@ -12,7 +12,7 @@ void parser_init() {
   mpca_lang(
     MPCA_LANG_DEFAULT,
     "number: /-?[0-9]+/;"
-    "symbol: '+' | '-' | '*' | '/' | \"list\" ;"
+    "symbol: '+' | '-' | '*' | '/' | \"list\" | \"car\" | \"cdr\" ;"
     "s_expr: '(' <expr>* ')' ;"
     "quote: '(' \"quote\" <expr> ')' | '\'' <expr> ;"
     "expr: <number> | <symbol> | <s_expr> | <quote> ;"

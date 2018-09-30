@@ -8,6 +8,8 @@ types *builtin_binop_t(char *op, types *args);
 
 types *builtin_list_t(types *args);
 
+types *builtin_car_t(types *args);
+
 types *eval_t(types *t) {
   switch (t->type) {
     case S_EXPR_T:
@@ -43,6 +45,7 @@ types *eval_s_expr_t(types *t) {
 
 types *builtin_t(types *func, types *args) {
   if (strcmp("list", func->symbol) == 0) { return builtin_list_t(args); }
+  if (strcmp("car", func->symbol) == 0) { return builtin_car_t(args); }
   if (strstr("+-*/", func->symbol)) {
     return builtin_binop_t(func->symbol, args);
   }
@@ -85,6 +88,29 @@ types *builtin_binop_t(char *op, types *args) {
     free_t(current);
   }
 
+  free_t(args);
+
+  return head;
+}
+
+types *builtin_car_t(types *args) {
+  if (args->children_num != 1) {
+    free_t(args);
+    return new_func_err_t(ERR_INVALID_ARGS_NUMBER, "car");
+  }
+
+  if (args->children[0]->type != QUOTE_T) {
+    free_t(args);
+    return new_func_err_t(ERR_INVALID_ARGS_TYPE, "car");
+  }
+
+  if (args->children[0]->quote->type != S_EXPR_T ||
+      args->children[0]->quote->children_num < 1) {
+    free_t(args);
+    return new_func_err_t(ERR_INVALID_ARGS, "car");
+  }
+
+  types *head = pop_t(args->children[0]->quote, 0);
   free_t(args);
 
   return head;

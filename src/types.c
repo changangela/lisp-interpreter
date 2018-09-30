@@ -12,6 +12,15 @@ types *new_err_t(int err_code) {
   types *ret = malloc(sizeof(types));
   ret->type = ERR_T;
   ret->err = err_code;
+  ret->func_name = "lisp";
+  return ret;
+}
+
+types *new_func_err_t(int err_code, char *func_name) {
+  types *ret = malloc(sizeof(types));
+  ret->type = ERR_T;
+  ret->err = err_code;
+  ret->func_name = func_name;
   return ret;
 }
 
@@ -68,6 +77,18 @@ void print_err_t(types *t) {
     case ERR_MUST_BE_NUMBER_SYMBOL:
       printf("error: cannot perform operation on non-number");
       return;
+    case ERR_INVALID_ARGS_NUMBER:
+      printf("error: wrong number of arguments passed to function '%s'",
+             t->func_name);
+      return;
+    case ERR_INVALID_ARGS_TYPE:
+      printf("error: wrong type of arguments passed to function '%s'",
+             t->func_name);
+      return;
+    case ERR_INVALID_ARGS:
+      printf("error: invalid arguments passed to function '%s'",
+             t->func_name);
+      return;
   }
 }
 
@@ -109,7 +130,7 @@ void print_expr_t(types *t) {
 }
 
 void print_t(types *t) {
-  switch(t->type) {
+  switch (t->type) {
     case QUOTE_T:
       print_expr_t(t->quote);
       return;
@@ -154,7 +175,10 @@ types *read_t(mpc_ast_t *ast) {
       // ' <expr>
       quote = read_t(ast->children[1]);
     }
-    if (quote->type == ERR_T) { free(ret); return quote; }
+    if (quote->type == ERR_T) {
+      free(ret);
+      return quote;
+    }
     ret = new_quote_t(quote);
   }
 
@@ -167,8 +191,12 @@ void free_t(types *t) {
     case SYMBOL_T:
       free(t->symbol);
       break;
-
-    case QUOTE_T: free(t->quote); break;
+    case ERR_T:
+      free(t->func_name);
+      break;
+    case QUOTE_T:
+      free(t->quote);
+      break;
     case S_EXPR_T:
       for (int i = 0; i < t->children_num; ++i) {
         free_t(t->children[i]);
