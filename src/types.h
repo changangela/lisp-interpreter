@@ -18,6 +18,7 @@ enum {
   ERR_TOO_MANY_ARGS,
   ERR_UNBOUND_SYMBOL,
   ERR_NOT_ENOUGH_ARGS,
+  ERR_TYPE_MISMATCH,
 };
 
 struct val_t {

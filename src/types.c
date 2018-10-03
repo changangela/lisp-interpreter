@@ -81,6 +81,7 @@ const char *err_fmt_t(int err_code) {
     case ERR_NOT_ENOUGH_ARGS: return "error: too few arguments passed to function '%s'";
     case ERR_INVALID_ARG_TYPE: return "error: function '%s' passed invalid type for argument %d: found %s, expected %s";
     case ERR_INVALID_ARG_VALUE: return "error: function '%s' passed invalid value for argument %d: found %s, expected %s";
+    case ERR_TYPE_MISMATCH: return "error: expecting a %s, found %s";
   }
 }
 

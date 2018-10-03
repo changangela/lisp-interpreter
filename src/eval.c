@@ -28,7 +28,11 @@ val_t *eval_s_expr_t(env_t *env, val_t *t) {
       free(head);
       return result;
     }
-    default: return head;
+    default: {
+      val_t *err = new_err_t(ERR_TYPE_MISMATCH, type_name(SYMBOL_T), type_name(head->type));
+      free(head);
+      return err;
+    }
   }
 }
 
