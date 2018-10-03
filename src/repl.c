@@ -11,5 +11,7 @@ void repl() {
     parser_parse(env, buffer);
     free(buffer);
   }
+
   parser_cleanup();
+  free_env_t(env);
 }
