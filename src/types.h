@@ -12,14 +12,12 @@ enum {
 
 enum {
   ERR_DIV_ZERO,
-  ERR_INVALID_SYMBOL,
   ERR_INVALID_NUMBER,
-  ERR_NO_SYMBOL,
-  ERR_INVALID_ARGS,
+  ERR_INVALID_ARG_TYPE,
+  ERR_INVALID_ARG_VALUE,
   ERR_TOO_MANY_ARGS,
-  ERR_INVALID_LIST_ARG,
-  ERR_INVALID_NUMBER_ARG,
   ERR_UNBOUND_SYMBOL,
+  ERR_NOT_ENOUGH_ARGS,
 };
 
 struct val_t {
@@ -29,19 +27,19 @@ struct val_t {
   int children_num;
   struct val_t **children; // pointer to a list of references to "val_t"
   builtin_t func;
-
-  int err_code;
   char *err;
 };
 
 val_t *new_number_t(long number);
-val_t *new_err_t(int err_code, char *err);
+val_t *new_err_t(int err_code, ...);
 val_t *new_symbol_t(char *symbol);
 val_t *new_s_expr_t();
 val_t *new_quote_t(val_t *expr);
 val_t *new_func_t(builtin_t *func);
 
 void s_expr_add_t(val_t *s_expr, val_t *t);
+const char *type_name(int type);
+
 void print_t(val_t *t);
 void println_t(val_t *t);
 

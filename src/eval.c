@@ -19,22 +19,17 @@ val_t *eval_s_expr_t(env_t *env, val_t *t) {
   if (t->children_num == 1 && t->children[0]->type != SYMBOL_T)
     return eval_t(env, t->children[0]);
 
-  val_t *func = eval_t(env, pop_t(t, 0));
-  if (func->type != FUNC_T) {
-    free_t(t);
-    if (func->type == ERR_T) {
-      return func;
-    } else {
-      free(func);
-      return new_err_t(ERR_NO_SYMBOL, "");
+  val_t *head = eval_t(env, pop_t(t, 0));
+
+  switch (head->type) {
+    case ERR_T: return head;
+    case FUNC_T: {
+      val_t *result = head->func(env, t);
+      free(head);
+      return result;
     }
+    default: return head;
   }
-
-  val_t *result = func->func(env, t);
-
-  free_t(func);
-
-  return result;
 }
 
 val_t *deep_eval_t(env_t *env, val_t *args) {

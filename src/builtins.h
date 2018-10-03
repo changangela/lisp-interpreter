@@ -14,6 +14,7 @@ val_t *builtin_div_t(env_t *env, val_t *args);
 val_t *builtin_append_t(env_t *env, val_t *args);
 val_t *builtin_car_t(env_t *env, val_t *args);
 val_t *builtin_cdr_t(env_t *env, val_t *args);
+val_t *builtin_defvar_t(env_t *env, val_t *args);
 val_t *builtin_eval_t(env_t *env, val_t *args);
 val_t *builtin_list_t(env_t *env, val_t *args);
 val_t *builtin_quote_t(env_t *env, val_t *args);

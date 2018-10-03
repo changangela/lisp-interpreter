@@ -1,6 +1,8 @@
 #include <stdlib.h>
 #include "types.h"
 
+const char *err_fmt_t(int err_code);
+
 val_t *new_number_t(long number) {
   val_t *ret = malloc(sizeof(val_t));
   ret->type = NUMBER_T;
@@ -8,13 +10,21 @@ val_t *new_number_t(long number) {
   return ret;
 }
 
-val_t *new_err_t(int err_code, char *err) {
+val_t *new_err_t(int err_code, ...) {
   val_t *ret = malloc(sizeof(val_t));
   ret->type = ERR_T;
-  ret->err_code = err_code;
 
-  ret->err = malloc(strlen(err) + 1);
-  strcpy(ret->err, err);
+  va_list va;
+  va_start(va, err_code);
+
+  int ERR_SIZE = 1 << 10;
+  ret->err = malloc(ERR_SIZE);
+
+  vsnprintf(ret->err, ERR_SIZE - 1, err_fmt_t(err_code), va);
+
+  ret->err = realloc(ret->err, strlen(ret->err) + 1);
+
+  va_end(va);
 
   return ret;
 }
@@ -62,32 +72,31 @@ void s_expr_add_t(val_t *s_expr, val_t *t) {
   s_expr->children[s_expr->children_num - 1] = t;
 }
 
-void print_err_t(val_t *t) {
-  switch (t->err_code) {
-    case ERR_DIV_ZERO: printf("error: divide by zero");
-      return;
-    case ERR_INVALID_SYMBOL: printf("error: invalid function: '%s'", t->err);
-      return;
-    case ERR_INVALID_NUMBER: printf("error: '%s' is an invalid number", t->err);
-      return;
-    case ERR_NO_SYMBOL:
-      printf("error: function not found at start of s-expression");
-      return;
-    case ERR_INVALID_ARGS: printf("error: invalid arguments: '%s'", t->err);
-      return;
-    case ERR_TOO_MANY_ARGS:
-      printf("error: too many arguments given to function '%s'",
-        t->err);
-      return;
-    case ERR_INVALID_LIST_ARG:
-      printf("error: non-list argument passed to function '%s'",
-        t->err);
-      return;
-    case ERR_INVALID_NUMBER_ARG:
-      printf("error: non-number argument passed to operator '%s'", t->err);
-      return;
-    case ERR_UNBOUND_SYMBOL: printf("error: unbounded symbol: '%s'", t->err);
+const char *err_fmt_t(int err_code) {
+  switch (err_code) {
+    case ERR_UNBOUND_SYMBOL: return "error: unbounded symbol '%s'";
+    case ERR_DIV_ZERO: return "error: division by zero";
+    case ERR_INVALID_NUMBER: return "error: '%s' is not a valid number";
+    case ERR_TOO_MANY_ARGS: return "error: too many arguments passed to function '%s'";
+    case ERR_NOT_ENOUGH_ARGS: return "error: too few arguments passed to function '%s'";
+    case ERR_INVALID_ARG_TYPE: return "error: function '%s' passed invalid type for argument %d: found %s, expected %s";
+    case ERR_INVALID_ARG_VALUE: return "error: function '%s' passed invalid value for argument %d: found %s, expected %s";
   }
+}
+
+const char *type_name(int type) {
+  switch (type) {
+    case NUMBER_T: return "number";
+    case ERR_T: return "error";
+    case SYMBOL_T: return "symbol";
+    case S_EXPR_T: return "list";
+    case FUNC_T: return "function";
+    default: return "unknown";
+  }
+}
+
+void print_err_t(val_t *t) {
+  printf(t->err);
 }
 
 void print_s_expr_t(val_t *t) {
@@ -211,20 +220,18 @@ val_t *copy_t(val_t *t) {
   ret->type = t->type;
 
   switch (t->type) {
-    case FUNC_T: ret->func = t->func; break;
-    case NUMBER_T: ret->number = t->number; break;
-    case SYMBOL_T:
-      ret->symbol = malloc(strlen(t->symbol) + 1);
+    case FUNC_T: ret->func = t->func;
+      break;
+    case NUMBER_T: ret->number = t->number;
+      break;
+    case SYMBOL_T:ret->symbol = malloc(strlen(t->symbol) + 1);
       strcpy(ret->symbol, t->symbol);
       break;
-    case ERR_T:
-      ret->err_code = t->err_code;
-      ret->err = malloc(strlen(t->err));
+    case ERR_T:ret->err = malloc(strlen(t->err));
       strcpy(ret->err, t->err);
       break;
-    case S_EXPR_T:
-      ret->children_num = t->children_num;
-      ret->children = malloc(sizeof(val_t*) * ret->children_num);
+    case S_EXPR_T:ret->children_num = t->children_num;
+      ret->children = malloc(sizeof(val_t *) * ret->children_num);
       for (int i = 0; i < t->children_num; ++i) {
         ret->children[i] = copy_t(t->children[i]);
       }
