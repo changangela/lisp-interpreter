@@ -20,17 +20,16 @@ void parser_init() {
   );
 }
 
-void parser_parse(env_t *env, char *buffer) {
+void parser_parse(env_t *env, char *buffer_out, char *buffer_in) {
   mpc_result_t result;
-
-  if (mpc_parse("<stdin>", buffer, Program, &result)) {
+  if (mpc_parse("<stdin>", buffer_in, Program, &result)) {
     val_t *lisp = eval_t(env, read_t(result.output));
-    println_t(lisp);
+    to_string_t(buffer_out, lisp);
     free_t(lisp);
     mpc_ast_delete(result.output);
 
   } else {
-    mpc_err_print(result.error);
+    buffer_out = mpc_err_string(result.error);
     mpc_err_delete(result.error);
   }
 }

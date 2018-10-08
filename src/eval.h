@@ -15,5 +15,6 @@ if (!(cond)) { \
 val_t *eval_t(env_t *env, val_t *t);
 val_t *eval_s_expr_t(env_t *env, val_t *t);
 val_t *deep_eval_t(env_t *env, val_t *args);
+val_t *eval_lambda_t(env_t *env, val_t *lambda, val_t *args);
 
 #endif //eval_h

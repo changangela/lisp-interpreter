@@ -38,7 +38,7 @@ val_t *builtin_car_t(env_t *env, val_t *args) {
   assert_t(args->children_num == 1, args,
     args->children_num < 1 ? ERR_NOT_ENOUGH_ARGS : ERR_TOO_MANY_ARGS, "car");
   assert_t(args->children[0]->type == S_EXPR_T, args, ERR_INVALID_ARG_TYPE,
-    "car", 1, type_name(args->children[0]->type), type_name(S_EXPR_T));
+    "car", 1, type_name_t(args->children[0]->type), type_name_t(S_EXPR_T));
 
   if (args->children[0]->children_num >= 1) {
     val_t *head = pop_t(args->children[0], 0);
@@ -60,7 +60,7 @@ val_t *builtin_cdr_t(env_t *env, val_t *args) {
   assert_t(args->children_num == 1, args,
     args->children_num < 1 ? ERR_NOT_ENOUGH_ARGS : ERR_TOO_MANY_ARGS, "cdr");
   assert_t(args->children[0]->type == S_EXPR_T, args, ERR_INVALID_ARG_TYPE,
-    "cdr", 1, type_name(args->children[0]->type), type_name(S_EXPR_T));
+    "cdr", 1, type_name_t(args->children[0]->type), type_name_t(S_EXPR_T));
 
   val_t *list = take_t(args, 0);
   if (list->children_num > 1) {
@@ -70,6 +70,7 @@ val_t *builtin_cdr_t(env_t *env, val_t *args) {
 }
 
 val_t *builtin_quote_t(env_t *env, val_t *args) {
+  (void) env;
   assert_t(args->children_num == 1, args,
     args->children_num < 1 ? ERR_NOT_ENOUGH_ARGS : ERR_TOO_MANY_ARGS, "quote");
   val_t *quote = take_t(args, 0);
@@ -85,7 +86,7 @@ val_t *builtin_eval_t(env_t *env, val_t *args) {
   assert_t(args->children_num == 1, args,
     args->children_num < 1 ? ERR_NOT_ENOUGH_ARGS : ERR_TOO_MANY_ARGS, "eval");
   assert_t(args->children[0]->type == S_EXPR_T, args, ERR_INVALID_ARG_TYPE,
-    "eval", 1, type_name(args->children[0]->type), "expression");
+    "eval", 1, type_name_t(args->children[0]->type), "expression");
 
   val_t *expr = take_t(args, 0);
   return eval_s_expr_t(env, expr);
@@ -99,7 +100,8 @@ val_t *builtin_append_t(env_t *env, val_t *args) {
 
   for (int i = 0; i < args->children_num; ++i) {
     assert_t(args->children[i]->type == S_EXPR_T, args, ERR_INVALID_ARG_TYPE,
-      "append", i + 1, type_name(args->children[i]->type), type_name(S_EXPR_T));
+      "append", i + 1, type_name_t(args->children[i]->type),
+      type_name_t(S_EXPR_T));
   }
 
   val_t *head = pop_t(args, 0);
@@ -120,7 +122,7 @@ val_t *builtin_binop_t(env_t *env, char *op, val_t *args) {
 
   for (int i = 0; i < args->children_num; ++i) {
     assert_t(args->children[i]->type == NUMBER_T, args, ERR_INVALID_ARG_TYPE,
-      op, i + 1, type_name(args->children[i]->type), type_name(NUMBER_T));
+      op, i + 1, type_name_t(args->children[i]->type), type_name_t(NUMBER_T));
   }
 
   val_t *head = args->children_num > 0 ? pop_t(args, 0) : new_number_t(0);
@@ -152,7 +154,7 @@ val_t *builtin_binop_t(env_t *env, char *op, val_t *args) {
 val_t *builtin_defvar_t(env_t *env, val_t *args) {
   assert_t(args->children_num >= 2, args, ERR_NOT_ENOUGH_ARGS, "defvar");
   assert_t(args->children[0]->type == SYMBOL_T, args, ERR_INVALID_ARG_TYPE,
-    "defvar", 1, type_name(args->children[0]->type), type_name(SYMBOL_T));
+    "defvar", 1, type_name_t(args->children[0]->type), type_name_t(SYMBOL_T));
 
   val_t *key = pop_t(args, 0);
   val_t *val = eval_t(env, take_t(args, 0));
@@ -163,6 +165,59 @@ val_t *builtin_defvar_t(env_t *env, val_t *args) {
 
   env_insert_t(env, key, val);
 
-  free(val);
+  free_t(val);
   return key;
+}
+
+val_t *builtin_defun_t(env_t *env, val_t *args) {
+  assert_t(args->children_num >= 2, args, ERR_NOT_ENOUGH_ARGS, "defun");
+  assert_t(args->children[0]->type == SYMBOL_T, args, ERR_INVALID_ARG_TYPE,
+    "defun", 1, type_name_t(args->children[0]->type), type_name_t(SYMBOL_T));
+  assert_t(args->children[1]->type == S_EXPR_T, args, ERR_INVALID_ARG_TYPE,
+    "defun", 2, type_name_t(args->children[1]->type), type_name_t(S_EXPR_T));
+
+  if (args->children_num >= 3) {
+    assert_t(args->children[2]->type == S_EXPR_T, args, ERR_INVALID_ARG_TYPE,
+      "defun", 3, type_name_t(args->children[2]->type), type_name_t(S_EXPR_T));
+  }
+
+  val_t *key = pop_t(args, 0);
+  val_t *formals = pop_t(args, 0);
+  val_t *body = args->children_num > 0 ? pop_t(args, 0) : new_s_expr_t();
+
+  for (int i = 0; i < formals->children_num; ++i) {
+    assert_t(formals->children[i]->type == SYMBOL_T, args,
+      ERR_INVALID_LAMBDA_FORMALS, i + 1,
+      type_name_t(formals->children[i]->type), type_name_t(SYMBOL_T));
+  }
+  free_t(args);
+
+  val_t *val = new_named_lambda_t(formals, body, key->symbol);
+  env_insert_t(env, key, val);
+  free_t(val);
+
+  return key;
+}
+
+val_t *builtin_lambda_t(env_t *env, val_t *args) {
+  assert_t(args->children_num >= 1, args, ERR_NOT_ENOUGH_ARGS, "lambda")
+  assert_t(args->children[0]->type == S_EXPR_T, args, ERR_INVALID_ARG_TYPE,
+    "lambda", 1, type_name_t(args->children[0]->type), type_name_t(S_EXPR_T));
+
+  if (args->children_num >= 2) {
+    assert_t(args->children[1]->type == S_EXPR_T, args, ERR_INVALID_ARG_TYPE,
+      "defun", 2, type_name_t(args->children[1]->type), type_name_t(S_EXPR_T));
+  }
+
+  val_t *formals = pop_t(args, 0);
+  val_t *body = args->children_num > 0 ? pop_t(args, 0) : new_s_expr_t();
+
+  for (int i = 0; i < formals->children_num; ++i) {
+    assert_t(formals->children[i]->type == SYMBOL_T, args,
+      ERR_INVALID_LAMBDA_FORMALS, i + 1,
+      type_name_t(formals->children[i]->type), type_name_t(SYMBOL_T));
+  }
+
+  free_t(args);
+  return new_lambda_t(formals, body);
 }

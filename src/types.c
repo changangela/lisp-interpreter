@@ -1,6 +1,8 @@
 #include <stdlib.h>
 #include "types.h"
+#include "env.h"
 
+void to_string_val_t(char *buffer, val_t *t);
 const char *err_fmt_t(int err_code);
 
 val_t *new_number_t(long number) {
@@ -58,10 +60,31 @@ val_t *new_quote_t(val_t *expr) {
   return ret;
 }
 
-val_t *new_func_t(builtin_t *func) {
+val_t *new_func_t(builtin_t func) {
   val_t *ret = malloc(sizeof(val_t));
   ret->type = FUNC_T;
   ret->func = func;
+  return ret;
+}
+
+val_t *new_named_lambda_t(val_t *formals, val_t *body, char *name) {
+  val_t *ret = new_lambda_t(formals, body);
+
+  ret->name = malloc(strlen(name) + 1);
+  strcpy(ret->name, name);
+
+  return ret;
+}
+
+val_t *new_lambda_t(val_t *formals, val_t *body) {
+  val_t *ret = malloc(sizeof(val_t));
+  ret->type = LAMBDA_T;
+
+  ret->env = new_env_t();
+  ret->formals = formals;
+  ret->body = body;
+  ret->name = NULL;
+
   return ret;
 }
 
@@ -82,10 +105,12 @@ const char *err_fmt_t(int err_code) {
     case ERR_INVALID_ARG_TYPE: return "error: function '%s' passed invalid type for argument %d: found %s, expected %s";
     case ERR_INVALID_ARG_VALUE: return "error: function '%s' passed invalid value for argument %d: found %s, expected %s";
     case ERR_TYPE_MISMATCH: return "error: expecting a %s, found %s";
+    case ERR_INVALID_LAMBDA_FORMALS: return "error: invalid lambda list element %d: found %s, expected %s";
   }
+  return NULL;
 }
 
-const char *type_name(int type) {
+const char *type_name_t(int type) {
   switch (type) {
     case NUMBER_T: return "number";
     case ERR_T: return "error";
@@ -96,45 +121,48 @@ const char *type_name(int type) {
   }
 }
 
-void print_err_t(val_t *t) {
-  printf(t->err);
+void to_string_err_t(char *ret, val_t *t) {
+  sprintf(ret + strlen(ret), "%s", t->err);
 }
 
-void print_s_expr_t(val_t *t) {
-  putchar('(');
+void to_string_s_expr_t(char *ret, val_t *t) {
+  sprintf(ret + strlen(ret), "(");
   for (int i = 0; i < t->children_num; ++i) {
-    print_t(t->children[i]);
+    to_string_val_t(ret, t->children[i]);
 
     if (i < t->children_num - 1) {
-      putchar(' ');
+      sprintf(ret + strlen(ret), " ");
     }
   }
-  putchar(')');
+  sprintf(ret + strlen(ret), ")");
 }
 
-void print_expr_t(val_t *t) {
+void to_string_val_t(char *buffer, val_t *t) {
   switch (t->type) {
-    case NUMBER_T: printf("%li", t->number);
+    case NUMBER_T: sprintf(buffer + strlen(buffer), "%li", t->number);
       return;
-    case SYMBOL_T: printf("%s", t->symbol);
+    case SYMBOL_T: sprintf(buffer + strlen(buffer), "%s", t->symbol);
       return;
-    case S_EXPR_T: print_s_expr_t(t);
+    case S_EXPR_T: to_string_s_expr_t(buffer, t);
       return;
-    case ERR_T: print_err_t(t);
+    case ERR_T: to_string_err_t(buffer, t);
       return;
-    case FUNC_T: printf("<function>");
+    case FUNC_T: sprintf(buffer + strlen(buffer), "<function>");
+      return;
+    case LAMBDA_T: {
+      sprintf(buffer + strlen(buffer), "(%s ",
+        t->name == NULL ? "lambda" : t->name);
+      to_string_val_t(buffer, t->formals);
+      sprintf(buffer + strlen(buffer), " ");
+      to_string_val_t(buffer, t->body);
+      sprintf(buffer + strlen(buffer), ")");
+      return;
+    }
   }
 }
 
-void print_t(val_t *t) {
-  switch (t->type) {
-    default: print_expr_t(t);
-  }
-}
-
-void println_t(val_t *t) {
-  print_t(t);
-  printf("\n");
+void to_string_t(char *buffer, val_t *t) {
+  to_string_val_t(buffer, t);
 }
 
 val_t *read_number_t(mpc_ast_t *ast) {
@@ -170,7 +198,7 @@ val_t *read_t(mpc_ast_t *ast) {
   if (strstr(ast->tag, "quote")) {
     val_t *quote = read_t(ast->children[1]);
     if (quote->type == ERR_T) {
-      free(ret);
+      free_t(ret);
       return quote;
     }
     ret = new_quote_t(quote);
@@ -190,6 +218,16 @@ void free_t(val_t *t) {
         free_t(t->children[i]);
       }
       free(t->children);
+      break;
+    case LAMBDA_T: {
+      free_env_t(t->env);
+      free_t(t->formals);
+      free_t(t->body);
+      if (t->name != NULL) {
+        free(t->name);
+      }
+      break;
+    }
   }
   free(t);
 }
@@ -209,7 +247,7 @@ val_t *pop_t(val_t *t, int i) {
   return target;
 }
 
-void *join_t(val_t *head, val_t *tail) {
+void join_t(val_t *head, val_t *tail) {
   while (tail->children_num > 0) {
     s_expr_add_t(head, pop_t(tail, 0));
   }
@@ -225,18 +263,30 @@ val_t *copy_t(val_t *t) {
       break;
     case NUMBER_T: ret->number = t->number;
       break;
-    case SYMBOL_T:ret->symbol = malloc(strlen(t->symbol) + 1);
+    case SYMBOL_T: ret->symbol = malloc(strlen(t->symbol) + 1);
       strcpy(ret->symbol, t->symbol);
       break;
-    case ERR_T:ret->err = malloc(strlen(t->err));
+    case ERR_T: ret->err = malloc(strlen(t->err));
       strcpy(ret->err, t->err);
       break;
-    case S_EXPR_T:ret->children_num = t->children_num;
+    case S_EXPR_T: ret->children_num = t->children_num;
       ret->children = malloc(sizeof(val_t *) * ret->children_num);
       for (int i = 0; i < t->children_num; ++i) {
         ret->children[i] = copy_t(t->children[i]);
       }
       break;
+    case LAMBDA_T: {
+      ret->env = copy_env_t(t->env);
+      ret->formals = copy_t(t->formals);
+      ret->body = copy_t(t->body);
+      if (t->name == NULL) {
+        ret->name = NULL;
+      } else {
+        ret->name = malloc(strlen(t->name) + 1);
+        strcpy(ret->name, t->name);
+      }
+      break;
+    }
   }
 
   return ret;

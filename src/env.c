@@ -9,9 +9,26 @@ env_t *new_env_t() {
   env->num_elements = 0;
   env->symbols = NULL;
   env->values = NULL;
+  env->parent = NULL;
 
   env_init_builtins_t(env);
   return env;
+}
+
+env_t *copy_env_t(env_t *env) {
+  env_t *ret = malloc(sizeof(env_t));
+  ret->num_elements = env->num_elements;
+  ret->parent = env->parent;
+  ret->symbols = malloc(sizeof(char *) * env->num_elements);
+  ret->values = malloc(sizeof(val_t *) * env->num_elements);
+
+  for (int i = 0; i < env->num_elements; ++i) {
+    ret->symbols[i] = malloc(strlen(env->symbols[i]) + 1);
+    strcpy(ret->symbols[i], env->symbols[i]);
+    ret->values[i] = copy_t(env->values[i]);
+  }
+
+  return ret;
 }
 
 void free_env_t(env_t *env) {
@@ -30,6 +47,10 @@ val_t *env_get_t(env_t *env, val_t *symbol) {
     if (strcmp(env->symbols[i], symbol->symbol) == 0) {
       return copy_t(env->values[i]);
     }
+  }
+
+  if (env->parent != NULL) {
+    return env_get_t(env->parent, symbol);
   }
 
   return new_err_t(ERR_UNBOUND_SYMBOL, symbol->symbol);
@@ -65,6 +86,14 @@ void env_insert_t(env_t *env, val_t *key, val_t *val) {
   }
 }
 
+void env_global_update_or_insert_t(env_t *env, val_t *key, val_t *val) {
+  env_t *current = env;
+  while (current->parent != NULL) {
+    current = current->parent;
+  }
+  env_update_or_insert_t(current, key, val);
+}
+
 bool env_exists_t(env_t *env, val_t *key) {
   for (int i = 0; i < env->num_elements; ++i) {
     if (strcmp(env->symbols[i], key->symbol) == 0) {
@@ -91,8 +120,10 @@ void env_init_builtins_t(env_t *env) {
   env_add_builtin_t(env, "append", builtin_append_t);
   env_add_builtin_t(env, "car", builtin_car_t);
   env_add_builtin_t(env, "cdr", builtin_cdr_t);
+  env_add_builtin_t(env, "defun", builtin_defun_t);
   env_add_builtin_t(env, "defvar", builtin_defvar_t);
   env_add_builtin_t(env, "eval", builtin_eval_t);
   env_add_builtin_t(env, "list", builtin_list_t);
   env_add_builtin_t(env, "quote", builtin_quote_t);
+  env_add_builtin_t(env, "lambda", builtin_lambda_t);
 }
